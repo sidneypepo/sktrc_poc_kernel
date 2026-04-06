@@ -1,5 +1,148 @@
 #+title: README
 #+author: Sidney PEPO
+#+date: [2026-04-07 Tue]
 
-* SKTRC PoC Kernel
-A mirror of the [[http://security.debian.org/debian-security/pool/updates/main/l/linux/linux-source-6.12_6.12.73-1_all.deb][official Debian Kernel (Debian 13.3/Linux 6.12.73)]], but patched with SKTRC for the Proof-of-Concept.
+#+begin_center
+#+html: <p align="center">
+#+html: <img src="res/logo/short_light.png" alt="SKTRC logo" height="250">
+#+html: </p>
+#+end_center
+
+* SKTRC Proof-of-Concept Kernel
+A mirror of the [[http://security.debian.org/debian-security/pool/updates/main/l/linux/linux-source-6.12_6.12.73-1_all.deb][official Debian Kernel (Debian 13.3/Linux 6.12.73)]], but patched
+with SKTRC for Proof-of-Concept (PoC) demonstration purposes.
+
+The original ~README~ can be read at [[file:README_original][README_original]].
+
+* Demonstration
+[[https://youtu.be/1S7Fgx0teUs][Click here]] to watch the Proof-of-Concept demo video and [[file:../../../sktrc][here]] to access the SKTRC
+repo.
+
+* Branches
+This repository is organized in two branches. Check them below:
+
+- ~master~: the default branch. It contains the actual PoC patches.
+
+- ~debian~: the actual Kernel mirror, but without any modifications. The
+  original source-tree package link is
+  http://security.debian.org/debian-security/pool/updates/main/l/linux/linux-source-6.12_6.12.73-1_all.deb
+  ([[https://web.archive.org/web/20260319172224/http://security.debian.org/debian-security/pool/updates/main/l/linux/linux-source-6.12_6.12.73-1_all.deb][archive]]) and its checksum is
+  ~10b67825707f8a16bf2c017c6377da836946dcfde7b38a626362cbc650a7c3c7~ (SHA-256).
+
+* Build & install
+This is pretty straight-forward, but make sure to read everything before
+executing any command!
+
+** Prerequisites
+This PoC was crafted and tested in a Debian 13.3. The following procedures might
+work in other Debian versions or Debian-based distros, however that's not
+guaranteed.
+
+Also, you'll need the softwares shipped with the ~build-essential~ package
+(version 12.12 and up). To install it, run (as root):
+
+#+begin_src sh
+apt install -y build-essential
+#+end_src
+
+Last, but not least, make sure to backup *AND* move your original Kernel files
+(i.e.: ~vmlinuz~, ~System.map~, ~initrd.img~ and ~config~) to avoid name
+collision or overwriting. If you don't want to move those files, rename them
+making their version names be ~6.12.72~ or less. The renaming could be
+automatically done by running
+
+#+begin_src sh
+for file in PATH/TO/*6.12.73*; do mv ${file} ${file//6.12.73/6.12.72}; done
+#+end_src
+
+#+begin_quote
+Note: don’t forget to change ~PATH/TO/~ to the actual path where your Kernel
+files are! This should be, by default, ~/boot/~.
+#+end_quote
+
+** Building
+1. In the repo, check if the following list of files do exists:
+   ~kernel/poc/{poc_ets.h,poc_ets.c,poc_sktrc.c}~, and
+   ~kernel/trace/sktrc.c~.
+
+   If they don't exist, run
+  
+   #+begin_src sh
+git reset --hard HEAD
+
+git pull origin master
+   #+end_src
+
+   #+begin_quote
+   Note: if you've changed the default remote name, don't forget to change
+   ~origin~ with the actual value.
+   #+end_quote
+
+2. Now, in the root path of this repo, prepare the build by running
+
+   #+begin_src sh
+make olddefconfig
+   #+end_src
+
+3. Start the build by running
+
+   #+begin_src sh
+make bindeb-pkg -jTHREADS
+   #+end_src
+
+   #+begin_quote
+   Note: make sure change ~THREADS~ by the amount of threads that you would like
+   to use. With 16 threads, the build will take around 25 minutes.
+   #+end_quote
+
+   If everything goes fine, you should get 4 ~.deb~ files, which are: the Kernel
+   headers, the Kernel libc and the Kernel image with and without debugging
+   symbols.
+
+** Installing
+1. With the built ~.deb~ files, run (as root):
+
+   #+begin_src sh
+dpkg -i linux-headers-6.12.73+_*.deb linux-image-6.12.73+_*.deb
+   #+end_src
+
+2. Enable the event tracing system PoC by adding it to the grub's config file.
+   To to this, run
+
+   #+begin_src sh
+sed -i -e "s/ro  quiet/ro  quiet trace_event=poc_ets/" PATH/TO/grub/grub.cfg
+
+grep -B8 "trace_event=poc_ets" PATH/TO/grub/grub.cfg | head -n 1
+   #+end_src
+
+   and make sure that the output starts with ~menuentry~. If it doesn't, you
+   have probably forgot to move or rename your original Kernel files, as
+   explained in the [[#Prerequisites][Prerequisites]] section, so do it and repeat the [[#Installing][Installing]]
+   section steps.
+
+   #+begin_quote
+   Note: don’t forget to change ~PATH/TO/~ to the actual path where GRUB is
+   installed! This should be, by default, ~/boot/~.
+   #+end_quote
+
+3. Now reboot your device. If everything goes well, your system should boot up.
+
+4. To get the event tracing system output, run
+
+   #+begin_src sh
+cat /sys/kernel/tracing/trace
+   #+end_src
+
+5. To get the SKTRC output, follow the steps 1 and 4 described in the section
+   [[file:../../../sktrc#Testing-SKTRC][Testing SKTRC]] from the [[file:../../../sktrc][SKTRC repo]].
+
+   Now run
+
+   #+begin_src sh
+insmod PATH/TO/sktrc_flush.ko
+
+cat /var/log/sktrc.log
+   #+end_src
+
+   changing ~PATH/TO/~ to the actual path where the ~sktrc_flush.ko~ module is
+   located.
